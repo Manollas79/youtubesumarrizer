@@ -25,27 +25,48 @@ and analyze the entire video and provide the entire transcript in points
 above 2000 words. Please provide the entire transcript of the text given here:
 """
 
+# Function to extract the video ID from the YouTube URL
+def get_video_id(youtube_url):
+    if "v=" in youtube_url:
+        return youtube_url.split("v=")[1].split("&")[0]
+    elif "youtu.be/" in youtube_url:
+        return youtube_url.split("youtu.be/")[1].split("?")[0]
+    else:
+        return None
+
 # Function to extract transcript details from YouTube videos
 def extract_transcript_details(youtube_video_url):
     try:
-        video_id = youtube_video_url.split("v=")[1]
+        video_id = get_video_id(youtube_video_url)
+        if not video_id:
+            raise ValueError("Invalid YouTube URL")
+        
         transcript_text = YouTubeTranscriptApi.get_transcript(video_id)
         transcript = " ".join([i["text"] for i in transcript_text])
         return transcript
     except Exception as e:
-        raise e
+        st.error(f"Error extracting transcript: {e}")
+        return None
 
 # Function to generate content using Google Gemini
 def generate_gemini_content(transcript_text, prompt):
-    model = genai.GenerativeModel("gemini-pro")
-    response = model.generate_content(prompt + transcript_text)
-    return response.text
+    try:
+        model = genai.GenerativeModel("gemini-pro")
+        response = model.generate_content(prompt + transcript_text)
+        return response.text
+    except Exception as e:
+        st.error(f"Error generating content: {e}")
+        return None
 
 # Function to translate text using googletrans
 def translate_text(text, target_language):
-    translator = Translator()
-    translation = translator.translate(text, dest=target_language)
-    return translation.text
+    try:
+        translator = Translator()
+        translation = translator.translate(text, dest=target_language)
+        return translation.text
+    except Exception as e:
+        st.error(f"Error translating text: {e}")
+        return None
 
 # Language options for translation
 LANGUAGE_OPTIONS = {
@@ -132,28 +153,33 @@ st.markdown("<div class='container'><div class='title'>YouTube Transcript Summar
 # Input for YouTube video link
 youtube_link = st.text_input("YouTube URL", placeholder="Enter YouTube URL... https://www.youtube.com/watch?v=Mcm3CE", label_visibility='hidden')
 if youtube_link:
-    video_id = youtube_link.split("v=")[1]
-    st.image(f"http://img.youtube.com/vi/{video_id}/0.jpg", use_column_width=True)
+    video_id = get_video_id(youtube_link)
+    if video_id:
+        st.image(f"http://img.youtube.com/vi/{video_id}/0.jpg", use_column_width=True)
+    else:
+        st.error("Invalid YouTube URL")
 
 # Button to get summarized notes
 if st.button("Get Summarized Notes"):
     transcript_text = extract_transcript_details(youtube_link)
     if transcript_text:
         summary = generate_gemini_content(transcript_text, summary_prompt)
-        st.session_state['summary'] = summary
-        st.session_state.pop('analysis', None)
-        st.subheader("Summarized Notes:")
-        st.write(summary)
+        if summary:
+            st.session_state['summary'] = summary
+            st.session_state.pop('analysis', None)
+            st.subheader("Summarized Notes:")
+            st.write(summary)
 
 # Button to get detailed notes
 if st.button("Get Detailed Notes"):
     transcript_text = extract_transcript_details(youtube_link)
     if transcript_text:
         analysis = generate_gemini_content(transcript_text, additional_prompt)
-        st.session_state['analysis'] = analysis
-        st.session_state.pop('summary', None)
-        st.subheader("Detailed Notes:")
-        st.write(analysis)
+        if analysis:
+            st.session_state['analysis'] = analysis
+            st.session_state.pop('summary', None)
+            st.subheader("Detailed Notes:")
+            st.write(analysis)
 
 # Ensure summary is available before showing translation options
 if 'summary' in st.session_state:
@@ -164,18 +190,19 @@ if 'summary' in st.session_state:
     if st.button("Translate Summarized Notes"):
         summary = st.session_state['summary']
         translated_summary = translate_text(summary, LANGUAGE_OPTIONS[target_language])
-        st.session_state['translated_summary'] = translated_summary
-        
-        # Display both the summarized notes and the translated summary
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Summarized Notes:")
-            st.write(summary)
-        
-        with col2:
-            st.subheader("Translated Summarized Notes:")
-            st.write(translated_summary)
+        if translated_summary:
+            st.session_state['translated_summary'] = translated_summary
+            
+            # Display both the summarized notes and the translated summary
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Summarized Notes:")
+                st.write(summary)
+            
+            with col2:
+                st.subheader("Translated Summarized Notes:")
+                st.write(translated_summary)
 
 # Ensure analysis is available before showing translation options
 if 'analysis' in st.session_state:
@@ -186,15 +213,16 @@ if 'analysis' in st.session_state:
     if st.button("Translate Detailed Notes"):
         analysis = st.session_state['analysis']
         translated_analysis = translate_text(analysis, LANGUAGE_OPTIONS[target_language])
-        st.session_state['translated_analysis'] = translated_analysis
-        
-        # Display both the detailed notes and the translated analysis
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            st.subheader("Detailed Notes:")
-            st.write(analysis)
-        
-        with col4:
-            st.subheader("Translated Detailed Notes:")
-            st.write(translated_analysis)
+        if translated_analysis:
+            st.session_state['translated_analysis'] = translated_analysis
+            
+            # Display both the detailed notes and the translated analysis
+            col3, col4 = st.columns(2)
+            
+            with col3:
+                st.subheader("Detailed Notes:")
+                st.write(analysis)
+            
+            with col4:
+                st.subheader("Translated Detailed Notes:")
+                st.write(translated_analysis)
